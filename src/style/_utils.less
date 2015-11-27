@@ -1,0 +1,60 @@
+@btn-border-color-default: #888;
+@btn-bg-color-default: #ddd;
+@btn-text-color-default: #333;
+
+@btn-border-color-primary: #666;
+@btn-bg-color-primary: #ccc;
+@btn-text-color-primary: #000;
+
+@btn-border-color-secondary: #ccc;
+@btn-bg-color-secondary: #eee;
+@btn-text-color-secondary: #444;
+
+.form-defaults() {
+  display: inline-block;
+  border: 1px solid;
+  border-radius: 4px;
+  vertical-align: middle;
+  font-size: 14px;
+}
+
+.btn {
+  padding: .33em .66em;
+  margin: 0;
+  .form-defaults();
+
+  &-default {
+    border-color: @btn-border-color-default;
+    color: @btn-text-color-default;
+    background-color: @btn-bg-color-default;
+  }
+
+  &-primary {
+    border-color: @btn-border-color-primary;
+    color: @btn-text-color-primary;
+    background-color: @btn-bg-color-primary;
+  }
+
+  &-secondary {
+    border-color: @btn-border-color-secondary;
+    color: @btn-text-color-secondary;
+    background-color: @btn-bg-color-secondary;
+  }
+
+  &-sm { font-size: 12px; }
+  &-lg { font-size: 16px; }
+}
+
+.form-select {
+  .form-defaults();
+}
+
+.form-label {
+  font-size: 14px;
+}
+
+.text {
+  &-center { text-align: center; }
+  &-left { text-align: left; }
+  &-right { text-align: right; }
+}

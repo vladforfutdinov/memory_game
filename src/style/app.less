@@ -1,0 +1,53 @@
+@import "_utils";
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background: #333;
+}
+
+body { display: table; }
+
+.container {
+  display: table-cell;
+  vertical-align: middle;
+  text-align: center;
+}
+
+.control { padding: .66em 0; }
+
+.table {
+  display: table;
+  margin: 0 auto;
+  border-spacing: 10px;
+
+  .row { display: table-row; }
+
+  .cell { display: table-cell; }
+
+  span {
+    display: block;
+    font-size: 3em;
+    width: 2em;
+    height: 2em;
+    line-height: 2em;
+    color: #000;
+    background: #fff;
+    border-radius: 5px;
+    cursor: pointer;
+
+    &.hide {
+      background: #999;
+    }
+    &.show {
+      background: #ddd;
+    }
+  }
+}
+
+.progress {
+  display: inline-block;
+  padding: .5em 1em;
+
+  &.win { background: #fff; }
+}

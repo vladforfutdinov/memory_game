@@ -1,0 +1,5 @@
+<label for="grid" class="form-label">Select grid</label>
+<select id="grid" class="form-select form-select-default"
+        ng-model="root.grid"
+        ng-options="n as (n + ' &times; ' + n) for n in [] | range:2:10"></select>
+
