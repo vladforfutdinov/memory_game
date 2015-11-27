@@ -1,3 +1,4 @@
+/* variables */
 @btn-border-color-default: #888;
 @btn-bg-color-default: #ddd;
 @btn-text-color-default: #333;
@@ -10,14 +11,30 @@
 @btn-bg-color-secondary: #eee;
 @btn-text-color-secondary: #444;
 
+@animation-ease: ease-in-out;
+@animation-duration: .5s;
+
+/* mixins */
+.property_(@property, @value) {
+  _: ~"; @{property}:" @value;
+}
+
+.vendor(@property, @value) {
+  .property_('-webkit-@{property}', @value);
+  .property_( '-khtml-@{property}', @value);
+  .property_(   '-moz-@{property}', @value);
+  .property_(          @property,   @value);
+}
+
 .form-defaults() {
   display: inline-block;
   border: 1px solid;
   border-radius: 4px;
   vertical-align: middle;
-  font-size: 14px;
+  font-size: 16px;
 }
 
+/* predefined styles */
 .btn {
   padding: .33em .66em;
   margin: 0;
@@ -41,8 +58,8 @@
     background-color: @btn-bg-color-secondary;
   }
 
-  &-sm { font-size: 12px; }
-  &-lg { font-size: 16px; }
+  &-sm { font-size: .87em; }
+  &-lg { font-size: 1.2em; }
 }
 
 .form-select {

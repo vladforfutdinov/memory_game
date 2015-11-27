@@ -1,21 +1,19 @@
 ﻿'use strict';
 
-var memGame = angular.module('myApp', ['ngRoute'])
-        .config(['$routeProvider', function ($routeProvider) {
-            $routeProvider.when('/splash', {
-                templateUrl: 'partial/splash.html',
-                controller:  'Splash'
-            });
-            $routeProvider.when('/game', {
-                templateUrl: 'partial/game.html',
-                controller:  'Game'
-            });
-            $routeProvider.otherwise({redirectTo: '/splash'});
-        }]);
+var memGame = angular.module('myApp', ['ngRoute']);
+
+memGame.config(function ($routeProvider) {
+    $routeProvider.when('/splash', {
+        templateUrl: 'partial/splash.html',
+        controller:  'Splash'
+    }).when('/game', {
+        templateUrl: 'partial/game.html',
+        controller:  'Game'
+    }).otherwise({redirectTo: '/splash'});
+});
 
 memGame.controller('Splash', function ($scope, $rootScope) {
     $rootScope.grid = 4;
-    $rootScope.state = 'splash';
     $scope.root = $rootScope;
 });
 
@@ -26,8 +24,6 @@ memGame.controller('Game', function ($scope, $rootScope, $location, $timeout, ut
     $scope.current = '';
     $scope.steps = 0;
     $scope.isTimeout = false;
-
-    $rootScope.state = 'game';
 
     $scope.createGrid = function (number) {
         var grid   = [],
@@ -60,7 +56,7 @@ memGame.controller('Game', function ($scope, $rootScope, $location, $timeout, ut
     $scope.rotate = function (i, j) {
         var num = $scope.array[i][j];
 
-        if ($scope.isTimeout) return;
+        if ($scope.checkWin() || $scope.isTimeout || $scope.current === (i + ':' + j)) return;
 
         if ($scope.current) $scope.second = i + ':' + j;
         else $scope.current = i + ':' + j;
@@ -76,13 +72,13 @@ memGame.controller('Game', function ($scope, $rootScope, $location, $timeout, ut
             $timeout(function () {
                 $scope.isTimeout = false;
                 $scope.resetOpen();
-            }, 500);
+            }, 1000);
         }
 
         $scope.steps++;
     };
 
-    $scope.checkWin  = function () {
+    $scope.checkWin = function () {
         return $scope.done.length === $rootScope.grid * $rootScope.grid / 2;
     };
 
@@ -98,10 +94,13 @@ memGame.controller('Game', function ($scope, $rootScope, $location, $timeout, ut
     $scope.init();
 });
 
-memGame.controller('Control', function ($scope, $rootScope, $location) {
-    $scope.root = $rootScope;
+memGame.controller('Control', function ($scope, $location) {
+    $scope.stateIs = function (str) {
+        return $location.$$path == '/' + str;
+    };
 
     $scope.go = function (path) {
         $location.path(path);
+        console.log($location);
     };
 });

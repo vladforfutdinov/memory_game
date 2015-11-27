@@ -23,31 +23,62 @@ body { display: table; }
 
   .row { display: table-row; }
 
-  .cell { display: table-cell; }
+  .cell {
+    display: table-cell;
 
-  span {
-    display: block;
-    font-size: 3em;
-    width: 2em;
-    height: 2em;
-    line-height: 2em;
-    color: #000;
-    background: #fff;
-    border-radius: 5px;
-    cursor: pointer;
+    > span {
+      display: block;
+      font-size: 3em;
+      width: 2em;
+      height: 2em;
+      position: relative;
 
-    &.hide {
-      background: #999;
-    }
-    &.show {
-      background: #ddd;
+      .front, .back {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 2em;
+        height: 2em;
+        line-height: 2em;
+        border-radius: 5px;
+        cursor: pointer;
+        color: transparent;
+        background: #999;
+        z-index: 1;
+        .vendor(transform-style, preserve-3d);
+        .vendor(backface-visibility, hidden);
+      }
+      .front {
+        .vendor(transition, all @animation-duration @animation-ease);
+        .vendor(transform, rotateX(0));
+      }
+      &.show .front {
+        .vendor(transform, rotateX(-180deg));
+      }
+      .back {
+        color: #000;
+        background: #ddd;
+        z-index: 0;
+        .vendor(transition, all @animation-duration @animation-ease);
+        .vendor(transform, rotateX(-180deg));
+      }
+      &.show .back {
+        z-index: 2;
+        .vendor(transform, rotateX(-0));
+      }
     }
   }
 }
 
-.progress {
+p {
   display: inline-block;
-  padding: .5em 1em;
+  padding: .25em 1em;
+  color: #fff;
 
-  &.win { background: #fff; }
+  .form-select { color: #000; }
+
+  &.win {
+    background: #fff;
+    color: #000;
+  }
 }

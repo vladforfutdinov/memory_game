@@ -3,13 +3,15 @@
          ng-repeat="(i, item) in array track by i">
         <div class="cell"
              ng-repeat="(j, num) in item track by j">
-            <span ng-bind="(isOpen(i, j) ? num : '&nbsp;')"
-                  ng-class="isOpen(i, j) ? 'show' : 'hide'"
-                  ng-click="rotate(i, j)"></span>
+            <span ng-click="rotate(i, j)"
+                  ng-class="isOpen(i, j) ? 'show' : 'hide'">
+                <span class="front">&nbsp;</span>
+                <span class="back" ng-bind="num"></span>
+            </span>
         </div>
     </div>
 </div>
-<p class="progress"
-   ng-class="{'win': checkWin()}">
-    <span ng-if="checkWin()">YOU WIN on </span><span ng-bind="steps"></span> steps
+<p ng-class="{'win': checkWin()}">
+    <span ng-if="checkWin()">You WON in</span>
+    <span ng-bind="steps"></span> moves
 </p>

@@ -1,8 +1,8 @@
 <div ng-controller="Control" class="control">
-    <button class="btn btn-default"
-            ng-if="root.state == 'splash'"
+    <button class="btn btn-default btn-lg"
+            ng-if="stateIs('splash')"
             ng-click="go('/game')">Start</button>
-    <button class="btn btn-default"
-            ng-if="root.state == 'game'"
+    <button class="btn btn-default btn-lg"
+            ng-if="stateIs('game')"
             ng-click="go('/splash')">Reset</button>
 </div>
