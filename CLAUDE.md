@@ -63,7 +63,7 @@ Position is still expressed as the string `"i:j"`, but only for the currently op
 
 `rotate(i, j)` ignores empty cells, ignores clicks during the timeout, and ignores a re-click on `current` (that last check stops a double-click matching a card with itself). Both outcomes are timed sequences with `isTimeout` held true throughout, so the board is inert until they finish:
 
-- **Match** — the pair stays face-up for `REVEAL` (700ms), then both cards get `leaving: true` (the `vanish` animation), then after `LEAVE` (400ms) both cells become `null` and `shuffleSeen()` runs into the cells they just freed. `LEAVE` must outlast `@leave-duration` in the Less or cards vanish mid-animation.
+- **Match** — the pair stays face-up for `REVEAL` (700ms), then both cards get `leaving: true` (the `vanish` animation), then after `LEAVE` (400ms) both cells become `null` and, **one tick later**, `shuffleSeen()` runs into the cells they just freed. That deferred tick is load-bearing: emptying and refilling a cell inside one digest means `ng-if` never sees it empty, so it reuses the vanished open card's element and the arriving card flies face-up. `LEAVE` must outlast `@leave-duration` in the Less or cards vanish mid-animation.
 - **Mismatch** — after 1s the pair flips back and `shuffleSeen()` runs.
 
 Both paths hold `isTimeout` until the resulting flights land. `shuffleSeen(done)` takes a completion callback and hands it to `flyMoves`, which calls it only after **every** card has reported landed. Do not go back to unlocking on a computed duration: the deferred render and reflow aren't in that number, so the board unlocked a few tens of ms early and a click in that window flipped a still-moving card open.
@@ -90,6 +90,8 @@ Measured at 0.07ms/frame for the full workload — there is no reason to reach f
 `src/style/app.css` is plain modern CSS — custom properties, native nesting, no preprocessor and no vendor-prefix mixin. The card flip is a pure-CSS 3D rotation on `.front`/`.back` toggled by the `show` class from `isOpen`, so animation changes belong in the CSS, not in the controller.
 
 Values that exist on both sides are commented as such: `--leave-duration` pairs with `LEAVE` in `app.js`, `--card-back` with `BASE` in `cardArt`.
+
+**Never transition `all` on the card faces.** It animates `z-index` and `visibility`, which are discrete and therefore switch at the *end* of the curve — a card reusing a vanished open card's element then kept the face above the cover and flew showing its number.
 
 Which face a card shows is driven by the **`faced` class**, set by the `cardFace` directive half a flip (250ms) after the card opens and cleared the same delay after it closes. `.back` is `visibility: hidden` without it. Do not go back to expressing this as a delayed CSS transition — the transition then runs on elements that had nothing to do with a flip, which is how relocating cards kept arriving with a number showing. (`backface-visibility` cannot do this job either: it stops holding the moment an ancestor transform flattens the 3D context, which is exactly what a flight does.)
 

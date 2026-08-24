@@ -146,8 +146,14 @@ memGame.controller('Game', function ($scope, $rootScope, $location, $timeout, ut
                     angular.forEach(pair, remove);
                     $scope.resetOpen();
 
-                    // The pair leaving is what frees the cells, so the reshuffle follows it.
-                    $scope.shuffleSeen(unlock);
+                    // The reshuffle waits a tick. Emptying a cell and refilling it inside one
+                    // digest means ng-if never observes it empty, so it reuses the vanished card's
+                    // element — and the arriving card inherits its open state and flies face-up.
+                    // A tick later the cell has actually rendered empty and the arriving card gets
+                    // a fresh element.
+                    $timeout(function () {
+                        $scope.shuffleSeen(unlock);
+                    });
                 }, LEAVE);
             }, REVEAL);
             return;

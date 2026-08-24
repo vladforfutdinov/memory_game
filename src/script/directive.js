@@ -64,6 +64,16 @@ memGame.directive('cardFlight', function ($timeout) {
                             finish();
                         };
 
+                        // A card can inherit the DOM element of a vanished open card: when a pair
+                        // matches, the cell goes card -> null -> another card inside one digest, so
+                        // ng-if never tears it down. `show` is gone but both faces are still
+                        // rotated open and would spend the whole flight turning back — the card
+                        // flies face-up. Snapping the faces to their closed state without a
+                        // transition is the only way to land them before the flight starts.
+                        card.classList.add('instant');
+                        void card.offsetHeight;
+                        card.classList.remove('instant');
+
                         card.classList.add('flying');
                         card.style.transition = 'none';
                         card.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) rotate(0deg)';

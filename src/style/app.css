@@ -98,7 +98,14 @@ body {
         z-index: 1;
         transform-style: preserve-3d;
         backface-visibility: hidden;
-        transition: all var(--flip-duration) var(--flip-ease);
+
+        /* Never `all`: that sweeps in z-index, which is discrete and so flips only at the END of
+           the curve. A card reusing the element of a vanished open card then kept the face's
+           z-index: 2 for half a second and flew with its number showing. */
+        transition:
+          transform var(--flip-duration) var(--flip-ease),
+          top var(--flip-duration) var(--flip-ease),
+          box-shadow var(--flip-duration) var(--flip-ease);
       }
 
       .front {
@@ -135,6 +142,11 @@ body {
         }
       }
     }
+
+    /* One frame with no transition, so a card that inherited an open card's element snaps
+       shut instead of turning over during its flight. */
+    > span.instant .front,
+    > span.instant .back { transition: none; }
 
     /* cardFlight sets the transform/transition inline; this only lifts a card in flight
        above the cards it passes over. */

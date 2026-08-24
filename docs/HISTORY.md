@@ -274,3 +274,57 @@ was kept, for Safari before 17.
 
 Dropped as dead while converting: `.btn-primary`, `.btn-secondary`, `.btn-sm`, `.text-*` and
 the `::-ms-expand` reset. None are referenced by any template.
+
+
+## 2026-08-24 — Open cards in flight: `transition: all` was animating z-index
+
+The real cause, found from two user observations that narrowed it precisely: it happened only
+with a vanishing pair, and only on diagonal flights.
+
+When a pair matches, its cell goes `card -> null -> another card` inside one digest, so ng-if
+never sees it empty and reuses the element of the vanished open card. `ng-class` correctly
+drops `show` — but the faces transitioned `all`, and `all` includes `z-index`. A discrete
+property does not switch when the class changes; it switches at the END of the curve. So the
+face kept `z-index: 2` over the cover for half a second, and the card flew showing its number.
+
+Caught directly — two cards in the same flight:
+
+    classes="hide flying" back z=2 top=-2.75px   <- inherited an open card's element
+    classes="hide flying" back z=0 top=0px       <- ordinary card
+
+The flip transition now lists `transform`, `top` and `box-shadow`. Never `all` here: it also
+sweeps in `visibility`, which caused a separate round of desynced face swaps earlier.
+
+Everything else tried against this bug (visibility pinning, `faced`/`flipping` state classes,
+an `!important` cover rule) was reverted; none of it was needed once the transition stopped
+animating a discrete property.
+
+
+## 2026-08-24 — Cards flying face-up: ng-if was reusing the vanished pair's elements
+
+Fixed. The cause was structural, not a timing race, and every earlier attempt (delayed
+visibility, `faced`/`flipping` state classes, an `!important` cover rule) treated a symptom.
+
+When a pair matches, `remove()` nulls its cells and `shuffleSeen()` refills them **inside the
+same digest**. `ng-if` therefore never observes the cells empty — the expression goes truthy →
+truthy — and reuses the DOM element of the vanished, open card. The arriving card inherits it
+with both faces still rotated open; they take 0.5s to turn back, which is exactly how long the
+flight lasts, so the card travels face-up. That explains both reported patterns: it only ever
+happened alongside a disappearing pair, and it looked random because it depended on whether a
+card happened to be routed into one of the pair's cells.
+
+The fix is one deferred tick: the reshuffle now runs in a `$timeout` after the removal, so the
+cells actually render empty, ng-if tears the old elements down, and arriving cards get fresh
+ones.
+
+Two smaller changes made along the way are worth keeping:
+
+- The face transition lists `transform`, `top` and `box-shadow` explicitly. `all` also
+  animates `z-index` and `visibility`, both discrete, which switch at the END of the curve.
+- `cardFlight` snaps a card shut without a transition (`instant`) before starting a flight —
+  belt-and-braces if an element is ever reused again.
+
+Debugging note that cost real time here: a Chrome tab whose window is not focused reports
+`document.hidden`, freezes rAF and throttles timers hard. Measurements taken there are
+worthless — at one point `current` was still set 2.5s after a click simply because the
+`$timeout` had not run. Verify anything time-dependent in a focused window.

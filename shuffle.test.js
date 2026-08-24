@@ -80,12 +80,14 @@ test("a match reveals the pair, then removes both cards", () => {
   expect(scope.array[a[0]][a[1]].leaving).toBe(true);
   expect(scope.array[b[0]][b[1]].leaving).toBe(true);
 
-  pending.shift().fn();                                          // vanish elapses
+  pending.shift().fn();                                          // vanish elapses: cells emptied
   expect(scope.array[a[0]][a[1]]).toBe(null);
   expect(scope.array[b[0]][b[1]]).toBe(null);
   expect(scope.current).toBe("");
 
-  // with no cardFlight attached the reshuffle reports done immediately, so the board unlocks
+  // the reshuffle is deferred one tick so ng-if sees the cells empty and rebuilds the elements
+  expect(scope.isTimeout).toBe(true);
+  pending.shift().fn();
   expect(scope.isTimeout).toBe(false);
 });
 
@@ -110,7 +112,8 @@ test("the board stays locked until every flight reports landed", () => {
   scope.rotate(a[0], a[1]);
   scope.rotate(b[0], b[1]);
   pending.shift().fn();                                            // reveal
-  pending.shift().fn();                                            // vanish -> reshuffle starts
+  pending.shift().fn();                                            // vanish: cells emptied
+  pending.shift().fn();                                            // next tick: reshuffle starts
 
   expect(typeof release).toBe("function");
   expect(scope.isTimeout).toBe(true);                              // still locked mid-flight
