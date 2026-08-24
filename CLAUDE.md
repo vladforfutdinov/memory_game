@@ -4,96 +4,66 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A memory (card-matching) game prototype built on **AngularJS 1.x** as a static site. All app code lives in `src/`; there is no build step for JS and no framework tooling — vendor libs are committed as minified files in `src/vendor/`.
-
-The repo root also contains a Bun scaffold (`index.ts`, `tsconfig.json`, `package.json`) that is unrelated to the game and unused by it — `index.ts` is just a hello-world stub. Do not assume the game runs through Bun.
+A memory (card-matching) game: **TypeScript, no framework**, bundled by Bun and served as static files. The whole app is five modules in `src/ts`, plus hand-written CSS. There is no runtime dependency.
 
 ## Commands
 
-Serve the static site (`http-server`, no caching, opens a browser):
-
 ```sh
-bun run dev
+bun run dev        # dev server with HMR on :8080
+bun run build      # production bundle into dist/
+bun test           # game rules, no DOM and no browser needed
+bun run typecheck  # tsc --noEmit, strict
 ```
 
-Then open `http://localhost:8080` — the router redirects `/` to `#/splash`.
+**There is no separate build step in development and no static-file server dependency.** `src/index.html` points straight at `./ts/main.ts`; Bun takes the HTML as its entry point, bundles the TypeScript on demand and serves it. `bun run build` does the same thing ahead of time into `dist/` (gitignored, content-hashed filenames).
 
-`src/style/app.css` is hand-written and loaded directly — there is no CSS build step, so edit it and reload.
-
-Run the game-logic check (`shuffle.test.js` loads the real controller against a stub
-`$scope`/`angular` — no browser, no karma):
-
-```sh
-bun test
-```
-
-There is no lint config or CI.
+`src/style/app.css` is hand-written and linked from the HTML; Bun picks it up as an asset — there is no CSS build step either.
 
 ## Architecture
 
-Everything is wired through the single module `myApp` (`src/script/app.js`), which uses `ngRoute`:
+- **`game.ts`** — rules and state. No DOM at all, which is what makes it directly testable. Timers are injected (`options.timer`), so tests drive the reveal/vanish/relocate sequences by hand instead of waiting.
+- **`board.ts`** — renders the card list into elements and keeps them in sync.
+- **`card-art.ts`** — the animated canvas pattern on the card backs.
+- **`backdrop.ts`** — the full-page animated background.
+- **`main.ts`** — hash router (`#/splash`, `#/game`), the two screens, and wiring.
 
-- `/splash` → `partial/splash.html` + `Splash` controller — grid-size picker only.
-- `/game` → `partial/game.html` + `Game` controller — the board.
-- Anything else redirects to `/splash`.
+`Game` owns the state and calls `onChange` whenever something the view draws has changed; `main.ts` re-renders on that.
 
-`src/index.html` renders `ng-view` for the routed partial plus a permanently-included `partial/control.html` (Start/Reset button), which lives outside the route and is driven by the `Control` controller checking `$location.$$path`.
+### The card model — read this before touching the board
 
-**Cross-route state is `$rootScope.grid`.** `Splash` sets it (default 4); `Game.init()` reads it and bounces back to `/` if it is missing. This is the only channel between the two screens — there is no service holding game state.
+**Cards are a flat list that owns its own position.** A `Card` carries `{id, value, row, col, seen, spin, delay, leaving}`. The grid is not a data structure; it is only the range `row`/`col` may take, because the matrix is just a screen layout.
 
-`src/script/utils.js` holds the pieces the controllers depend on but that are easy to miss: the `range` filter (populates the splash `<select>` with even sizes 2–10, so grids are always even and pairs always divide evenly) and the `utils` factory (`mixRow` shuffles the flat pair list; `floatArray` flattens nested arrays).
+The view keys elements by `card.id`, so **an element belongs to a card, not to a square**. Moving a card is an assignment to `row`/`col`; `board.ts` writes `--row`/`--col` and CSS animates the transform. There is no measuring, no FLIP, and nothing gets rebuilt when a card moves.
 
-`src/script/directive.js` holds all DOM-touching code: `cardFlight`, plus `cardArt` + `cardBack` for the animated card back. It attaches to `.table` and, having no isolate scope, publishes `flyMoves(moves)` onto the Game scope for `shuffleSeen()` to call.
+This is load-bearing, not stylistic. The previous design bound elements to cells, which let a matched pair's cell be emptied and refilled in one pass — the arriving card then inherited the vanished open card's element and flew face-up. Keying elements to cards removes that whole class of bug by construction.
 
-It animates relocation with FLIP: measure each card's rect before the model changes, then after the digest re-renders, translate the card at its *new* cell back to its old coordinates and transition it to zero, each flight offset by `STAGGER` so cards fly one after another. A card also spins a full `SPIN` turn in flight, alternating direction by index; the turn is a full 360° on purpose, so clearing the inline transform on landing lands on the same visual state the animation ended at. Two traps are already paid for here — the transition must be started by forcing a reflow rather than `requestAnimationFrame` (rAF stalls in a backgrounded tab and the card teleports), and `transitionend` must be filtered to `e.target === card && e.propertyName === 'transform'` because the `.front`/`.back` flip transitions bubble their own events up and would end the flight instantly.
+- `current` / `second` are **card references**, so `isOpen(card)` is identity — a card cannot read as open because of where it sits.
+- **Match** — the pair stays face-up for `reveal` (700ms), gets `leaving` (the `vanish` animation), and after `leave` (400ms) is filtered out of `cards`; then `shuffleSeen()` runs.
+- **Mismatch** — after `penalty` (1s) the pair closes and `shuffleSeen()` runs.
+- `locked` covers each whole sequence, so clicks are ignored until cards have landed.
+- On a mismatch the reshuffle runs **before** the pair is closed, so the two cards just turned are excluded from it. Early in a game that often means nothing moves at all — that is correct, not a bug.
 
-**Card backs** (`.front`, the cover — `.back` is the number side) are canvas-drawn. `cardArt` keeps a single 144×192 source canvas, draws one geometric frame into it per rAF tick, then `drawImage`s that frame into every registered card canvas — so all backs animate in lockstep by construction. Per-card drawing would drift them apart and multiply the geometry cost by the card count. `cardBack` is the per-card directive: it appends a canvas sized to the cell (times `devicePixelRatio`), registers it, and unregisters on `$destroy` — cards are destroyed whenever a pair is removed, so skipping that leaks blits into detached canvases. `register()` also paints one frame immediately, because rAF never runs while the tab is backgrounded and the card would otherwise be blank.
+Reshuffling is optional — a checkbox on the splash screen, passed as `new Game(grid, {reshuffle})`. With it off the game is ordinary memory: `shuffleSeen()` reports done and moves nothing.
 
-### Game board model
-
-**Cards are a flat list that owns its own position.** `$scope.cards` holds `{id, v, row, col, seen, spin, delay, leaving}`; the grid is not a data structure at all, just the range `row`/`col` are allowed to take. The view is `ng-repeat ... track by card.id` over that list, so **a DOM element belongs to a card, not to a square** — moving a card is an assignment to `row`/`col`, and the element it is bound to is never rebuilt.
-
-That is the whole reason the board is laid out with absolute positioning rather than a table: relocating a card is a transform change that CSS animates on its own. There is no measuring, no FLIP, and no directive coordinating flights. The earlier design bound elements to cells, which meant a matched pair's cell could be emptied and refilled inside one digest — `ng-if` then reused the vanished open card's element and the arriving card flew face-up. That entire class of bug is gone by construction.
-
-`createGrid(n)` deals `1..n*n/2` twice, shuffles both the values and the list of squares, and pairs them up.
-
-- `current` / `second` are **card objects**, not coordinates, so `isOpen(card)` is identity — a card cannot be "open" because of where it happens to sit.
-- `rotate(card)` ignores clicks while `isTimeout` holds, on a leaving card, and on the already-open card.
-- **Match** — the pair stays face-up for `REVEAL` (700ms), then both get `leaving: true` (the `vanish` animation), then after `LEAVE` (400ms) they are spliced out of `cards` and `shuffleSeen()` fills the gaps.
-- **Mismatch** — after `PENALTY` (1s) the pair flips back and `shuffleSeen()` runs.
-
-`shuffleSeen(done)` is the penalty mechanic: **every** seen, unopened card moves, one after another. They are relocated in sequence, and a card that leaves puts its own square back into the free list for whoever comes next — which is why a single gap is enough to walk the whole set along, however crowded the board is. The staggered `delay` is therefore load-bearing rather than decorative: it keeps the vacancy ahead of the card taking it. `step` shrinks as the number of movers grows so the whole run still fits inside `RUN` (700ms). `spin` accumulates a whole turn per move, so the card rotates in transit and still rests at its original angle. `done` fires once the last card has had time to land, and the board stays locked until then.
-
-Win is "no cards left".
-
-Positions reach the DOM through `cardPos`, which writes `--row`, `--col`, `--spin` and `--delay` as custom properties; the CSS turns those into a transform. Card size and gap live only in CSS, so the JS never needs to know pixel geometry.
+`shuffleSeen(done)` is the penalty mechanic: **every** seen, unopened card moves, one after another. They relocate in sequence, and a card that leaves puts its own square back into the free list for the next one — which is why a single gap is enough to walk the whole set along. The staggered `delay` is therefore part of the mechanic, not decoration: it keeps the vacancy ahead of the card taking it. The step shrinks as the mover count grows so a run still fits inside `TIMING.run`.
 
 ### Styles
 
-`src/style/app.css` is plain modern CSS — custom properties, native nesting, no preprocessor and no vendor-prefix mixin. The card flip is a pure-CSS 3D rotation on `.front`/`.back` toggled by the `show` class from `isOpen`, so animation changes belong in the CSS, not in the controller.
+`src/style/app.css` is plain modern CSS: custom properties, native nesting, no preprocessor, no vendor prefixes (bar `-webkit-user-select` for Safari < 17).
 
-Values that exist on both sides are commented as such: `--leave-duration` pairs with `LEAVE` in `app.js`, `--card-back` with `BASE` in `cardArt`.
+Values duplicated across the boundary are commented on both sides: `TIMING.leave` ↔ `--leave-duration`, `TIMING.move` ↔ `--move-duration`, `card-art.ts`'s `BASE` ↔ `--card-back`. Card size and gap live only in CSS — the TypeScript never deals in pixels.
 
-**Never transition `all` on the card faces.** It animates `z-index` and `visibility`, which are discrete and therefore switch at the *end* of the curve — a card reusing a vanished open card's element then kept the face above the cover and flew showing its number.
+Two traps that cost real time, both recorded in `docs/HISTORY.md`:
 
-Which face a card shows is driven by the **`faced` class**, set by the `cardFace` directive half a flip (250ms) after the card opens and cleared the same delay after it closes. `.back` is `visibility: hidden` without it. Do not go back to expressing this as a delayed CSS transition — the transition then runs on elements that had nothing to do with a flip, which is how relocating cards kept arriving with a number showing. (`backface-visibility` cannot do this job either: it stops holding the moment an ancestor transform flattens the 3D context, which is exactly what a flight does.)
+- **Never transition `all` on the card faces.** It animates `z-index` and `visibility`, which are discrete and therefore switch at the *end* of the curve.
+- **The vanish animation must not set `transform`.** It would drop the card's positional translate and the card would shrink from the top-left corner. It animates `--vanish-scale` / `--vanish-tilt` (registered with `@property`) instead.
 
-**`cardFace` also watches `cell`.** When a pair matches, its cell goes `card → null → another card` inside a single digest, so `ng-if` never observes it empty and reuses that very element for the card flying in — inheriting the vanished card's open face. Changing card resets the class.
+### Debugging note
 
-`transform-style: preserve-3d` belongs on the **flip container** (`.cell > span`), not on the faces — the faces have no 3D children, so declaring it there does nothing.
-
-The board is `user-select: none`. The card values sit in the DOM regardless of whether a card is face-up, so a double-click selects them all and the selection highlight paints them straight through the covers.
-
-Card movement and removal animate the **outer** span — never `.front`/`.back`, whose `transform` already carries the flip. `.flying` only lifts a card in flight above the ones it passes over; its motion is set inline by `cardFlight`. `.leaving` runs the `vanish` keyframes on a matched pair.
-
-**Animations do not advance in a backgrounded tab** — Chrome pauses transitions, rAF, and clamps timers there. Verify visual changes with the tab actually visible, or you will measure a card that never moves.
-
-An empty cell renders as `<span class="empty">` with **no content** — an `&nbsp;` inside it stretches rows containing a hole from 96px to 148px.
-
-`src/style/normalize.css` and `src/vendor/*` are third-party — leave them alone.
+A Chrome tab whose window is not focused reports `document.hidden`: rAF is frozen, timers are throttled hard, and style recalculation stops. Measurements taken there are worthless — verify anything time- or animation-dependent in a focused window.
 
 ## Conventions
 
-- ES5 only in `src/script/*` (`var`, function expressions, no modules) — it must run under the committed AngularJS 1.x without transpilation. The CSS has no such constraint and targets current browsers.
-- New scripts must be added manually as a `<script>` tag in `src/index.html`; there is no bundler.
-- Design decisions and their reasoning go in `docs/HISTORY.md`, not in code comments.
+- Strict TypeScript, including `noUncheckedIndexedAccess`; keep `bun run typecheck` clean.
+- Rules go in `game.ts` and get a test; DOM work stays in the view modules.
+- Design decisions and their reasoning belong in `docs/HISTORY.md`, not in code comments.

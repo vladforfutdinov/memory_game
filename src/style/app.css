@@ -256,6 +256,34 @@ p {
   &:hover { border-color: var(--control-accent); }
 }
 
+.form-check {
+  display: inline-flex;
+  align-items: center;
+  gap: .55em;
+  padding: .5em .9em;
+  border: 1px solid transparent;
+  border-radius: var(--control-radius);
+  vertical-align: middle;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+
+  input[type="checkbox"] {
+    width: 1.15em;
+    height: 1.15em;
+    margin: 0;
+    accent-color: var(--control-accent);
+    cursor: pointer;
+  }
+
+  &:hover { border-color: var(--control-accent); }
+
+  &:has(:focus-visible) {
+    outline: 2px solid var(--control-accent);
+    outline-offset: 2px;
+  }
+}
+
 .form-label {
   display: inline-block;
   margin-right: .7em;

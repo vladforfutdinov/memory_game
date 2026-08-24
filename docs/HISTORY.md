@@ -382,3 +382,42 @@ would be mid-flight into the same square.
 
 Verified on the worst case (6x6, a single gap, everything seen): 35 of 35 cards moved, 35
 distinct squares afterwards, zero DOM elements rebuilt.
+
+
+## 2026-08-24 — AngularJS dropped for plain TypeScript
+
+The app is now five TypeScript modules bundled by Bun, with no framework and no runtime
+dependency. AngularJS, its vendored copies, the HTML partials and the ES5 scripts are gone.
+
+The rewrite was cheap because the model had already been reshaped: cards were a flat list
+owning their coordinates, so `game.ts` is that model with types on it and nothing else. It has
+no DOM access whatsoever, which is what lets the tests import it directly — the old suite had
+to evaluate the controller through `new Function` with a stubbed `angular` object.
+
+Timers are injected rather than imported, so tests step through reveal → vanish → relocate by
+hand instead of sleeping. `board.ts` replaces `ng-repeat track by card.id` with an explicit
+`Map<id, element>` — same guarantee that an element belongs to a card, minus the framework.
+
+`tsc --noEmit` runs clean under `strict` plus `noUncheckedIndexedAccess`.
+
+
+## 2026-08-24 — Reshuffling became an option
+
+A checkbox on the splash screen turns it off, giving an ordinary memory game. `Game` takes
+`reshuffle` (default on) and `shuffleSeen()` reports done without moving anything when it is
+off — the rest of the sequence, including the lock, is untouched.
+
+Worth knowing when testing this by hand: on a mismatch the reshuffle runs before the pair is
+closed, so the two cards just turned are excluded, and cards seen in earlier turns may already
+have been matched away. Early in a game "nothing moved" is the correct outcome, which cost a
+few confused measurements before checking the engine directly showed 6 of 6 cards relocating.
+
+
+## 2026-08-24 — http-server and the manual bundle step both dropped
+
+Bun takes an HTML file as an entry point: `src/index.html` now references `./ts/main.ts`
+directly, and `bun ./src/index.html` bundles and serves it with HMR. `bun build` on the same
+HTML produces the production `dist/` with hashed asset names.
+
+That removed the project's only runtime dependency (`http-server`), the `src/dist` bundle
+committed into the served tree, and the "rebuild, then reload" step during development.
