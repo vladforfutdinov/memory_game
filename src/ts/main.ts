@@ -74,15 +74,19 @@ function game(): void {
   const board_ = document.createElement('div');
   const moves = document.createElement('p');
 
+  // Sits over the (by then empty) board rather than under it, so the win reads in the space the
+  // cards just left.
+  const banner = document.createElement('div');
+  banner.className = 'win-banner';
+
   const engine = new Game(grid, { reshuffle, onChange: () => paint() });
   board = new Board(board_, engine, art);
+  board_.appendChild(banner);
 
   function paint(): void {
     board?.render();
-    moves.classList.toggle('win', engine.won);
-    moves.textContent = engine.won
-      ? `You WON in ${engine.steps} moves`
-      : `${engine.steps} moves`;
+    banner.textContent = engine.won ? `You WON in ${engine.steps} moves` : '';
+    moves.textContent = engine.won ? '' : `${engine.steps} moves`;
   }
 
   paint();

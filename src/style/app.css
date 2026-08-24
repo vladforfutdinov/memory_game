@@ -186,11 +186,21 @@ p {
   color: #fff;
 
   .form-select { color: #000; }
+}
 
-  &.win {
-    background: #fff;
-    color: #000;
-  }
+/* Centred in the board, no plate behind it: the text carries its own contrast with a shadow,
+   since the backdrop underneath is dark but never uniform. */
+.win-banner {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #f4f8fc;
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-shadow: 0 1px 2px rgb(6 14 26 / .9), 0 4px 18px rgb(6 14 26 / .7);
+  pointer-events: none;
 }
 
 /* ---------- controls ---------- */
