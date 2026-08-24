@@ -19,11 +19,14 @@ memGame.controller('Splash', function ($scope, $rootScope) {
 
 memGame.controller('Game', function ($scope, $rootScope, $location, $timeout, utils) {
     $scope.array = [];
-    $scope.done = [];
     $scope.temp = null;
     $scope.current = '';
+    $scope.second = '';
     $scope.steps = 0;
     $scope.isTimeout = false;
+
+    var REVEAL = 700,   // how long a matched pair stays face-up before it leaves
+        LEAVE  = 400;   // must outlast the .leaving animation in app.less
 
     $scope.createGrid = function (number) {
         var grid   = [],
@@ -39,12 +42,13 @@ memGame.controller('Game', function ($scope, $rootScope, $location, $timeout, ut
         for (var i = 0; i < number; i++) {
             var sub = [];
             for (var j = 0; j < number; j++) {
-                sub.push(row[i * number + j]);
+                sub.push({v: row[i * number + j], seen: false});
             }
             grid.push(sub);
         }
 
         $scope.array = grid;
+        $scope.left = number * number;
     };
 
     $scope.resetOpen = function () {
@@ -53,38 +57,117 @@ memGame.controller('Game', function ($scope, $rootScope, $location, $timeout, ut
         $scope.second = '';
     };
 
-    $scope.rotate = function (i, j) {
-        var num = $scope.array[i][j];
-
-        if ($scope.checkWin() || $scope.isTimeout || $scope.current === (i + ':' + j)) return;
-
-        if ($scope.current) $scope.second = i + ':' + j;
-        else $scope.current = i + ':' + j;
-
-        if (!$scope.temp) {
-            $scope.temp = num;
-        }
-        else if ($scope.temp === num) {
-            $scope.done.push(num);
-            $scope.resetOpen();
-        } else {
-            $scope.isTimeout = true;
-            $timeout(function () {
-                $scope.isTimeout = false;
-                $scope.resetOpen();
-            }, 1000);
-        }
-
-        $scope.steps++;
+    var unlock = function () {
+        $scope.isTimeout = false;
     };
 
+    var coords = function (key) {
+        var parts = key.split(':');
+        return [parseInt(parts[0]), parseInt(parts[1])];
+    };
+
+    var remove = function (key) {
+        var c = coords(key);
+        $scope.array[c[0]][c[1]] = null;
+        $scope.left--;
+    };
+
+    // Relocates seen-but-unmatched cards into freed cells: the penalty for a wrong guess
+    // is that memorised positions stop being reliable.
+    $scope.shuffleSeen = function (done) {
+        var empty = [], movable = [];
+
+        angular.forEach($scope.array, function (row, i) {
+            angular.forEach(row, function (cell, j) {
+                var key = i + ':' + j;
+                if (!cell) empty.push([i, j]);
+                else if (cell.seen && key !== $scope.current && key !== $scope.second) movable.push([i, j]);
+            });
+        });
+
+        var max = Math.min(empty.length, movable.length);
+        if (!max) {
+            if (done) done();
+            return;
+        }
+
+        var count = 1 + Math.floor(Math.random() * max),
+            to    = utils.mixRow(empty),
+            from  = utils.mixRow(movable),
+            moves = [];
+
+        for (var n = 0; n < count; n++) {
+            moves.push({from: from[n], to: to[n]});
+        }
+
+        // Before mutating, so cardFlight measures the cards where they are still drawn. It only
+        // works today because the DOM lags the model until the next digest — do not reorder this.
+        // `done` fires when every card has landed, so the board stays locked for the whole flight
+        // and a click can never catch one mid-air and flip it open.
+        if ($scope.flyMoves) $scope.flyMoves(moves, done);
+
+        angular.forEach(moves, function (move) {
+            var card = $scope.array[move.from[0]][move.from[1]];
+            $scope.array[move.to[0]][move.to[1]] = card;
+            $scope.array[move.from[0]][move.from[1]] = null;
+        });
+
+        if (!$scope.flyMoves && done) done();
+    };
+
+    $scope.rotate = function (i, j) {
+        var cell = $scope.array[i][j],
+            key  = i + ':' + j;
+
+        if (!cell || $scope.isTimeout || $scope.current === key) return;
+
+        cell.seen = true;
+        $scope.steps++;
+
+        if (!$scope.current) {
+            $scope.current = key;
+            $scope.temp = cell.v;
+            return;
+        }
+
+        $scope.second = key;
+
+        if ($scope.temp === cell.v) {
+            var pair = [$scope.current, key];
+            $scope.isTimeout = true;
+
+            $timeout(function () {
+                angular.forEach(pair, function (k) {
+                    var c = coords(k);
+                    $scope.array[c[0]][c[1]].leaving = true;
+                });
+
+                $timeout(function () {
+                    angular.forEach(pair, remove);
+                    $scope.resetOpen();
+
+                    // The pair leaving is what frees the cells, so the reshuffle follows it.
+                    $scope.shuffleSeen(unlock);
+                }, LEAVE);
+            }, REVEAL);
+            return;
+        }
+
+        $scope.isTimeout = true;
+        $timeout(function () {
+            $scope.shuffleSeen(unlock);
+            $scope.resetOpen();
+        }, 1000);
+    };
+
+    // Bound twice in the template, so it runs on every digest: keep it a comparison, not a scan.
     $scope.checkWin = function () {
-        return $scope.done.length === $rootScope.grid * $rootScope.grid / 2;
+        return $scope.array.length > 0 && !$scope.left;
     };
 
     $scope.isOpen = function (i, j) {
-        var num = $scope.array[i][j];
-        return (num === $scope.temp && $scope.current === i + ':' + j) || $scope.second === i + ':' + j || $scope.done.indexOf(num) != -1;
+        var key = i + ':' + j;
+        return $scope.current === key || $scope.second === key;
     };
 
     $scope.init = function () {

@@ -18,11 +18,7 @@ bun run dev
 
 Then open `http://localhost:8080` — the router redirects `/` to `#/splash`.
 
-Recompile styles after editing `.less` (`src/style/app.css` is a committed, minified build artifact — never edit it by hand):
-
-```sh
-bunx lessc --clean-css src/style/app.less src/style/app.css
-```
+`src/style/app.css` is hand-written and loaded directly — there is no CSS build step, so edit it and reload.
 
 Run the game-logic check (`shuffle.test.js` loads the real controller against a stub
 `$scope`/`angular` — no browser, no karma):
@@ -91,9 +87,13 @@ Measured at 0.07ms/frame for the full workload — there is no reason to reach f
 
 ### Styles
 
-`src/style/app.less` imports `_utils.less`, which supplies the `.vendor()` mixin used to emit prefixed `transform`/`transition`/`backface-visibility`. The card flip is a pure-CSS 3D rotation on `.front`/`.back` toggled by the `show` class from `isOpen`, so animation changes belong in the Less, not in the controller.
+`src/style/app.css` is plain modern CSS — custom properties, native nesting, no preprocessor and no vendor-prefix mixin. The card flip is a pure-CSS 3D rotation on `.front`/`.back` toggled by the `show` class from `isOpen`, so animation changes belong in the CSS, not in the controller.
 
-A face-down card's number is hidden by **`visibility: hidden` on `.back`**, not by `backface-visibility` alone — the latter stops holding as soon as an ancestor transform flattens the 3D context, which is exactly what a flight does. Do not add a transition delay to that visibility: cards fly into the cells a matched pair just vacated, and a delay leaves the number painted there for the arriving card.
+Values that exist on both sides are commented as such: `--leave-duration` pairs with `LEAVE` in `app.js`, `--card-back` with `BASE` in `cardArt`.
+
+Which face a card shows is driven by the **`faced` class**, set by the `cardFace` directive half a flip (250ms) after the card opens and cleared the same delay after it closes. `.back` is `visibility: hidden` without it. Do not go back to expressing this as a delayed CSS transition — the transition then runs on elements that had nothing to do with a flip, which is how relocating cards kept arriving with a number showing. (`backface-visibility` cannot do this job either: it stops holding the moment an ancestor transform flattens the 3D context, which is exactly what a flight does.)
+
+**`cardFace` also watches `cell`.** When a pair matches, its cell goes `card → null → another card` inside a single digest, so `ng-if` never observes it empty and reuses that very element for the card flying in — inheriting the vanished card's open face. Changing card resets the class.
 
 `transform-style: preserve-3d` belongs on the **flip container** (`.cell > span`), not on the faces — the faces have no 3D children, so declaring it there does nothing.
 
@@ -109,6 +109,6 @@ An empty cell renders as `<span class="empty">` with **no content** — an `&nbs
 
 ## Conventions
 
-- ES5 only in `src/script/*` (`var`, function expressions, no modules) — it must run under the committed AngularJS 1.x without transpilation.
+- ES5 only in `src/script/*` (`var`, function expressions, no modules) — it must run under the committed AngularJS 1.x without transpilation. The CSS has no such constraint and targets current browsers.
 - New scripts must be added manually as a `<script>` tag in `src/index.html`; there is no bundler.
 - Design decisions and their reasoning go in `docs/HISTORY.md`, not in code comments.

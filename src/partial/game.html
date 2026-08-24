@@ -1,13 +1,15 @@
-<div class="table">
+<div class="table" card-flight>
     <div class="row"
          ng-repeat="(i, item) in array track by i">
         <div class="cell"
-             ng-repeat="(j, num) in item track by j">
-            <span ng-click="rotate(i, j)"
-                  ng-class="isOpen(i, j) ? 'show' : 'hide'">
-                <span class="front">&nbsp;</span>
-                <span class="back" ng-bind="num"></span>
+             ng-repeat="(j, cell) in item track by j">
+            <span ng-if="cell"
+                  ng-click="rotate(i, j)"
+                  ng-class="{'show': isOpen(i, j), 'hide': !isOpen(i, j), 'leaving': cell.leaving}">
+                <span class="front" card-back></span>
+                <span class="back" ng-bind="cell.v"></span>
             </span>
+            <span ng-if="!cell" class="empty"></span>
         </div>
     </div>
 </div>

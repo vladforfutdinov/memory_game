@@ -1,1 +1,236 @@
-.btn,.form-select{display:inline-block;vertical-align:middle}.btn,.container,.form-select{vertical-align:middle}.btn{padding:.33em .66em;margin:0;border:1px solid;border-radius:4px;font-size:16px}.btn-default{border-color:#888;color:#333;background-color:#ddd}.btn-primary{border-color:#666;color:#000;background-color:#ccc}.btn-secondary{border-color:#ccc;color:#444;background-color:#eee}.btn-sm{font-size:.87em}.btn-lg{font-size:1.2em}.form-select{border:1px solid;border-radius:4px;font-size:16px}.form-label{font-size:14px}.text-center{text-align:center}.text-left{text-align:left}.text-right{text-align:right}body,html{width:100%;height:100%;background:#666}body{display:table}.container{display:table-cell;text-align:center}.control{padding:.66em 0}.table{display:table;margin:0 auto;border-spacing:10px}.table .row{display:table-row}.table .cell{display:table-cell}.table .cell>span{display:block;font-size:3em;width:1.5em;height:2em;position:relative}.table .cell>span .back,.table .cell>span .front{position:absolute;top:0;left:0;width:1.5em;height:2em;line-height:2em;border-radius:5px;cursor:pointer;color:transparent;background:#999;z-index:1;-webkit-transform-style:preserve-3d;-khtml-transform-style:preserve-3d;-moz-transform-style:preserve-3d;transform-style:preserve-3d;-webkit-backface-visibility:hidden;-khtml-backface-visibility:hidden;-moz-backface-visibility:hidden;backface-visibility:hidden}.table .cell>span .front{box-shadow:0 0 3px rgba(0,0,0,.66);-webkit-transition:all .5s ease-in-out;-khtml-transition:all .5s ease-in-out;-moz-transition:all .5s ease-in-out;transition:all .5s ease-in-out;-webkit-transform:rotateX(0);-khtml-transform:rotateX(0);-moz-transform:rotateX(0);transform:rotateX(0)}.table .cell>span.show .front{top:-3px;-webkit-transform:rotateX(-180deg);-khtml-transform:rotateX(-180deg);-moz-transform:rotateX(-180deg);transform:rotateX(-180deg)}.table .cell>span .back{color:#000;background:#ddd;z-index:0;-webkit-transition:all .5s ease-in-out;-khtml-transition:all .5s ease-in-out;-moz-transition:all .5s ease-in-out;transition:all .5s ease-in-out;-webkit-transform:rotateX(-180deg);-khtml-transform:rotateX(-180deg);-moz-transform:rotateX(-180deg);transform:rotateX(-180deg)}.table .cell>span.show .back{box-shadow:0 3px 6px rgba(0,0,0,.3);top:-3px;z-index:2;-webkit-transform:rotateX(0);-khtml-transform:rotateX(0);-moz-transform:rotateX(0);transform:rotateX(0)}p{display:inline-block;padding:.25em 1em;color:#fff}p .form-select,p.win{color:#000}p.win{background:#fff}
+/* Hand-written CSS — there is no build step. Nesting, custom properties and `appearance`
+   are used directly; the vendor-prefix mixin this file replaced predated all of them. */
+
+:root {
+  --flip-duration: .5s;
+  --flip-ease: ease-in-out;
+  --leave-duration: .4s;          /* keep in step with LEAVE in app.js */
+
+  --page-bg: #0c1c33;
+  --card-back: #414f60;           /* cardArt paints the same colour */
+  --card-face: #ddd;
+
+  --control-radius: 8px;
+  --control-border: #b7c2ce;
+  --control-surface: #f4f7f9;
+  --control-text: #2f3a45;
+  --control-accent: #7c8b9c;
+  --control-ease: .18s ease;
+}
+
+@keyframes vanish {
+  to {
+    opacity: 0;
+    transform: scale(.3) rotate(12deg);
+  }
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+}
+
+/* The colour lives on html only. A background on body paints after negative z-index
+   children and would hide the backdrop canvas entirely. */
+html { background: var(--page-bg); }
+
+body {
+  display: table;
+  background: transparent;
+}
+
+/* Fixed, so it is out of flow and never becomes an anonymous cell of body's table layout. */
+.backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.container {
+  display: table-cell;
+  vertical-align: middle;
+  text-align: center;
+}
+
+.control { padding: .66em 0; }
+
+/* ---------- board ---------- */
+
+.table {
+  display: table;
+  margin: 0 auto;
+  border-spacing: 10px;
+
+  /* A double-click selects the board's text, and the selection highlight paints the card
+     values straight through their face-down covers — the whole board reads as open. */
+  -webkit-user-select: none;      /* Safari < 17 */
+  user-select: none;
+
+  .row { display: table-row; }
+
+  .cell {
+    display: table-cell;
+
+    > span {
+      display: block;
+      position: relative;
+      width: 1.5em;
+      height: 2em;
+      font-size: 3em;
+
+      .front,
+      .back {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 1.5em;
+        height: 2em;
+        line-height: 2em;
+        border-radius: 5px;
+        cursor: pointer;
+        color: transparent;
+        background: #999;
+        z-index: 1;
+        transform-style: preserve-3d;
+        backface-visibility: hidden;
+        transition: all var(--flip-duration) var(--flip-ease);
+      }
+
+      .front {
+        overflow: hidden;
+        background: var(--card-back);
+        box-shadow: 0 2px 8px rgb(20 28 38 / .45);
+        transform: rotateX(0);
+
+        canvas {
+          display: block;
+          width: 100%;
+          height: 100%;
+        }
+      }
+
+      .back {
+        color: #000;
+        background: var(--card-face);
+        z-index: 0;
+        transform: rotateX(-180deg);
+      }
+
+      &.show {
+        .front {
+          top: -3px;
+          transform: rotateX(-180deg);
+        }
+
+        .back {
+          top: -3px;
+          z-index: 2;
+          box-shadow: 0 3px 6px rgb(0 0 0 / .3);
+          transform: rotateX(0);
+        }
+      }
+    }
+
+    /* cardFlight sets the transform/transition inline; this only lifts a card in flight
+       above the cards it passes over. */
+    > span.flying {
+      position: relative;
+      z-index: 10;
+    }
+
+    > span.leaving { animation: vanish var(--leave-duration) var(--flip-ease) forwards; }
+    > span.empty { cursor: default; }
+  }
+}
+
+p {
+  display: inline-block;
+  padding: .25em 1em;
+  color: #fff;
+
+  .form-select { color: #000; }
+
+  &.win {
+    background: #fff;
+    color: #000;
+  }
+}
+
+/* ---------- controls ---------- */
+
+/* Shared metrics, so a button and a select line up and match. */
+.btn,
+.form-select {
+  display: inline-block;
+  box-sizing: border-box;
+  min-height: 2.5em;
+  padding: .5em .9em;
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+  vertical-align: middle;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.25;
+  color: var(--control-text);
+  background-color: var(--control-surface);
+  appearance: none;
+  transition:
+    background-color var(--control-ease),
+    border-color var(--control-ease),
+    box-shadow var(--control-ease),
+    transform var(--control-ease);
+
+  &:focus-visible {
+    outline: 2px solid var(--control-accent);
+    outline-offset: 2px;
+  }
+}
+
+.btn {
+  margin: 0;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(31 42 53 / .12);
+
+  &:hover {
+    border-color: var(--control-accent);
+    box-shadow: 0 3px 8px rgb(31 42 53 / .16);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    box-shadow: inset 0 2px 4px rgb(31 42 53 / .18);
+    transform: translateY(0);
+  }
+}
+
+.btn-lg { font-size: 1.2em; }
+
+.form-select {
+  padding-right: 2.4em;
+  cursor: pointer;
+
+  /* The chevron is a background image rather than markup, so the select needs no wrapper. */
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%232f3a45' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right .85em center;
+  background-size: .75em;
+
+  &:hover { border-color: var(--control-accent); }
+}
+
+.form-label {
+  display: inline-block;
+  margin-right: .7em;
+  vertical-align: middle;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  opacity: .9;
+}
