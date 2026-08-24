@@ -1,0 +1,19 @@
+{
+  "name": "memory_game",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "http-server": "^14.1.1"
+  },
+  "scripts": {
+    "dev": "http-server src -p 8080 -a 127.0.0.1 -c-1 -o",
+    "test": "bun test"
+  }
+}
