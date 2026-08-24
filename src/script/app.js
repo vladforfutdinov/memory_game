@@ -18,142 +18,140 @@ memGame.controller('Splash', function ($scope, $rootScope) {
 });
 
 memGame.controller('Game', function ($scope, $rootScope, $location, $timeout, utils) {
-    $scope.array = [];
-    $scope.temp = null;
-    $scope.current = '';
-    $scope.second = '';
+    var REVEAL  = 700,      // how long a matched pair stays face-up before it leaves
+        LEAVE   = 400,      // must outlast the .leaving animation in app.css
+        PENALTY = 1000,     // how long a mismatched pair stays face-up
+        MOVE    = 450,      // must match --move-duration in app.css
+        STAGGER = 160,      // gap between one relocating card and the next
+        RUN     = 700;      // ceiling on the whole staggered run, however many cards move
+
+    $scope.cards = [];
+    $scope.grid = 0;
+    $scope.current = null;
+    $scope.second = null;
     $scope.steps = 0;
     $scope.isTimeout = false;
-
-    var REVEAL = 700,   // how long a matched pair stays face-up before it leaves
-        LEAVE  = 400;   // must outlast the .leaving animation in app.less
-
-    $scope.createGrid = function (number) {
-        var grid   = [],
-            genRow = function (num) {
-                var arr = [];
-                for (var i = 1; i <= num * num / 2; i++) {
-                    arr.splice(arr.length, 0, i, i);
-                }
-                return arr;
-            },
-            row    = utils.mixRow(genRow(number));
-
-        for (var i = 0; i < number; i++) {
-            var sub = [];
-            for (var j = 0; j < number; j++) {
-                sub.push({v: row[i * number + j], seen: false});
-            }
-            grid.push(sub);
-        }
-
-        $scope.array = grid;
-        $scope.left = number * number;
-    };
-
-    $scope.resetOpen = function () {
-        $scope.temp = null;
-        $scope.current = '';
-        $scope.second = '';
-    };
 
     var unlock = function () {
         $scope.isTimeout = false;
     };
 
-    var coords = function (key) {
-        var parts = key.split(':');
-        return [parseInt(parts[0]), parseInt(parts[1])];
-    };
+    // A card owns its position rather than living in a cell: `row`/`col` are data, and the view
+    // renders them as a transform. Moving a card is then an assignment, and the element the card
+    // is bound to never has to be rebuilt.
+    $scope.createGrid = function (number) {
+        var values = [], spots = [], r, c, i;
 
-    var remove = function (key) {
-        var c = coords(key);
-        $scope.array[c[0]][c[1]] = null;
-        $scope.left--;
-    };
+        for (i = 1; i <= number * number / 2; i++) values.push(i, i);
+        for (r = 0; r < number; r++) {
+            for (c = 0; c < number; c++) spots.push([r, c]);
+        }
 
-    // Relocates seen-but-unmatched cards into freed cells: the penalty for a wrong guess
-    // is that memorised positions stop being reliable.
-    $scope.shuffleSeen = function (done) {
-        var empty = [], movable = [];
-
-        angular.forEach($scope.array, function (row, i) {
-            angular.forEach(row, function (cell, j) {
-                var key = i + ':' + j;
-                if (!cell) empty.push([i, j]);
-                else if (cell.seen && key !== $scope.current && key !== $scope.second) movable.push([i, j]);
+        spots = utils.mixRow(spots);
+        $scope.cards = [];
+        angular.forEach(utils.mixRow(values), function (v, n) {
+            $scope.cards.push({
+                id: n,
+                v: v,
+                row: spots[n][0],
+                col: spots[n][1],
+                seen: false,
+                spin: 0,
+                delay: 0,
+                leaving: false
             });
         });
 
-        var max = Math.min(empty.length, movable.length);
-        if (!max) {
+        $scope.grid = number;
+    };
+
+    $scope.resetOpen = function () {
+        $scope.current = null;
+        $scope.second = null;
+    };
+
+    $scope.isOpen = function (card) {
+        return card === $scope.current || card === $scope.second;
+    };
+
+    var remove = function (card) {
+        var at = $scope.cards.indexOf(card);
+        if (at !== -1) $scope.cards.splice(at, 1);
+    };
+
+    // Every card the player has already turned over moves, one after another. Moving them in
+    // sequence is what makes a crowded board work: a card that leaves frees its own square for
+    // whoever comes next, so a single gap is enough to walk the whole set along. The staggered
+    // delays are therefore load-bearing, not decoration — they keep the vacancy ahead of the
+    // card taking it.
+    $scope.shuffleSeen = function (done) {
+        var taken = {}, movers = [], free = [], r, c, n;
+
+        angular.forEach($scope.cards, function (card) {
+            taken[card.row + ':' + card.col] = true;
+            if (card.seen && !card.leaving && !$scope.isOpen(card)) movers.push(card);
+        });
+
+        for (r = 0; r < $scope.grid; r++) {
+            for (c = 0; c < $scope.grid; c++) {
+                if (!taken[r + ':' + c]) free.push([r, c]);
+            }
+        }
+
+        if (!movers.length || !free.length) {
             if (done) done();
             return;
         }
 
-        var count = 1 + Math.floor(Math.random() * max),
-            to    = utils.mixRow(empty),
-            from  = utils.mixRow(movable),
-            moves = [];
+        movers = utils.mixRow(movers);
 
-        for (var n = 0; n < count; n++) {
-            moves.push({from: from[n], to: to[n]});
+        // The run keeps its one-after-another reading but never drags on: with many cards the
+        // stagger shrinks so the whole reshuffle still fits inside RUN.
+        var step = Math.min(STAGGER, movers.length > 1 ? RUN / (movers.length - 1) : STAGGER);
+
+        for (n = 0; n < movers.length; n++) {
+            var card = movers[n],
+                pick = Math.floor(Math.random() * free.length),
+                spot = free[pick];
+
+            free[pick] = [card.row, card.col];      // the square it leaves is free for the next card
+            card.row = spot[0];
+            card.col = spot[1];
+            card.spin += n % 2 ? -360 : 360;        // a whole turn, so the resting angle is unchanged
+            card.delay = Math.round(n * step);
         }
 
-        // Before mutating, so cardFlight measures the cards where they are still drawn. It only
-        // works today because the DOM lags the model until the next digest — do not reorder this.
-        // `done` fires when every card has landed, so the board stays locked for the whole flight
-        // and a click can never catch one mid-air and flip it open.
-        if ($scope.flyMoves) $scope.flyMoves(moves, done);
-
-        angular.forEach(moves, function (move) {
-            var card = $scope.array[move.from[0]][move.from[1]];
-            $scope.array[move.to[0]][move.to[1]] = card;
-            $scope.array[move.from[0]][move.from[1]] = null;
-        });
-
-        if (!$scope.flyMoves && done) done();
+        // The board stays locked until the last card has landed, so a click cannot catch one
+        // mid-flight.
+        $timeout(function () {
+            if (done) done();
+        }, MOVE + Math.round((movers.length - 1) * step));
     };
 
-    $scope.rotate = function (i, j) {
-        var cell = $scope.array[i][j],
-            key  = i + ':' + j;
+    $scope.rotate = function (card) {
+        if ($scope.isTimeout || card.leaving || card === $scope.current) return;
 
-        if (!cell || $scope.isTimeout || $scope.current === key) return;
-
-        cell.seen = true;
+        card.seen = true;
         $scope.steps++;
 
         if (!$scope.current) {
-            $scope.current = key;
-            $scope.temp = cell.v;
+            $scope.current = card;
             return;
         }
 
-        $scope.second = key;
+        $scope.second = card;
 
-        if ($scope.temp === cell.v) {
-            var pair = [$scope.current, key];
+        if ($scope.current.v === card.v) {
+            var pair = [$scope.current, card];
             $scope.isTimeout = true;
 
             $timeout(function () {
-                angular.forEach(pair, function (k) {
-                    var c = coords(k);
-                    $scope.array[c[0]][c[1]].leaving = true;
-                });
+                angular.forEach(pair, function (c) { c.leaving = true; });
 
                 $timeout(function () {
                     angular.forEach(pair, remove);
                     $scope.resetOpen();
-
-                    // The reshuffle waits a tick. Emptying a cell and refilling it inside one
-                    // digest means ng-if never observes it empty, so it reuses the vanished card's
-                    // element — and the arriving card inherits its open state and flies face-up.
-                    // A tick later the cell has actually rendered empty and the arriving card gets
-                    // a fresh element.
-                    $timeout(function () {
-                        $scope.shuffleSeen(unlock);
-                    });
+                    $scope.shuffleSeen(unlock);
                 }, LEAVE);
             }, REVEAL);
             return;
@@ -163,17 +161,11 @@ memGame.controller('Game', function ($scope, $rootScope, $location, $timeout, ut
         $timeout(function () {
             $scope.shuffleSeen(unlock);
             $scope.resetOpen();
-        }, 1000);
+        }, PENALTY);
     };
 
-    // Bound twice in the template, so it runs on every digest: keep it a comparison, not a scan.
     $scope.checkWin = function () {
-        return $scope.array.length > 0 && !$scope.left;
-    };
-
-    $scope.isOpen = function (i, j) {
-        var key = i + ':' + j;
-        return $scope.current === key || $scope.second === key;
+        return $scope.grid > 0 && !$scope.cards.length;
     };
 
     $scope.init = function () {

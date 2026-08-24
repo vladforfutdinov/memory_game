@@ -1,17 +1,12 @@
-<div class="table" card-flight>
-    <div class="row"
-         ng-repeat="(i, item) in array track by i">
-        <div class="cell"
-             ng-repeat="(j, cell) in item track by j">
-            <span ng-if="cell"
-                  ng-click="rotate(i, j)"
-                  ng-class="{'show': isOpen(i, j), 'hide': !isOpen(i, j), 'leaving': cell.leaving}">
-                <span class="front" card-back></span>
-                <span class="back" ng-bind="cell.v"></span>
-            </span>
-            <span ng-if="!cell" class="empty"></span>
-        </div>
-    </div>
+<div class="board" board-grid="grid">
+    <span class="card"
+          ng-repeat="card in cards track by card.id"
+          card-pos="card"
+          ng-click="rotate(card)"
+          ng-class="{'show': isOpen(card), 'leaving': card.leaving}">
+        <span class="front" card-back></span>
+        <span class="back" ng-bind="card.v"></span>
+    </span>
 </div>
 <p ng-class="{'win': checkWin()}">
     <span ng-if="checkWin()">You WON in</span>

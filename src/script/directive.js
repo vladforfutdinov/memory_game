@@ -1,95 +1,43 @@
 'use strict';
 
-memGame.directive('cardFlight', function ($timeout) {
-    var DURATION = 450,
-        STAGGER  = 160,
-        SPIN     = 360;   // a full turn, so the cleared transform on landing matches the animated one
-
+// Position as CSS custom properties. The card element belongs to the card, not to a cell, so a
+// move is a value change on the element that is already there — no measuring, no FLIP, and
+// nothing for the framework to rebuild. `moves` is added a frame late so a card does not slide
+// in from the corner when it first appears.
+memGame.directive('cardPos', function () {
     return {
-        link: function (scope, element) {
-            // Rows are re-queried per batch, not per lookup: a shuffle asks for up to 2 cells per
-            // move and the row list is the same for all of them.
-            var cardAt = function (rows, coord) {
-                var row = rows[coord[0]],
-                    cell = row && row.querySelectorAll('.cell')[coord[1]];
-                return cell && cell.querySelector('span:not(.empty)');
-            };
+        link: function (scope, element, attrs) {
+            var el = element[0], placed = false;
 
-            // Called with the planned moves BEFORE the model changes, so source positions can be
-            // measured while the cards are still drawn in their old cells. `done` fires once every
-            // card has actually landed — never on an estimated duration, or the board unlocks while
-            // a card is still in the air and a click flips it open mid-flight.
-            scope.flyMoves = function (moves, done) {
-                var rows = element[0].querySelectorAll('.row'),
-                    flights = [];
+            var apply = function (card) {
+                if (!card) return;
 
-                angular.forEach(moves, function (move) {
-                    var card = cardAt(rows, move.from);
-                    if (card) flights.push({to: move.to, from: card.getBoundingClientRect()});
-                });
+                el.style.setProperty('--row', card.row);
+                el.style.setProperty('--col', card.col);
+                el.style.setProperty('--spin', (card.spin || 0) + 'deg');
+                el.style.setProperty('--delay', (card.delay || 0) + 'ms');
 
-                if (!flights.length) {
-                    if (done) done();
-                    return;
+                if (!placed) {
+                    placed = true;
+                    void el.offsetWidth;
+                    el.classList.add('moves');
                 }
-
-                var pending = flights.length,
-                    finish  = function () {
-                        if (--pending === 0 && done) $timeout(done);
-                    };
-
-                $timeout(function () {
-                    var landedRows = element[0].querySelectorAll('.row');
-
-                    angular.forEach(flights, function (flight, n) {
-                        var card = cardAt(landedRows, flight.to);
-                        if (!card) { finish(); return; }
-
-                        var now = card.getBoundingClientRect(),
-                            dx  = flight.from.left - now.left,
-                            dy  = flight.from.top - now.top,
-                            landed = false;
-
-                        // The .front/.back flip transitions bubble their transitionend up to the
-                        // card, so only this element's own transform ends the flight.
-                        var land = function (e) {
-                            if (e && (e.target !== card || e.propertyName !== 'transform')) return;
-                            if (landed) return;
-                            landed = true;
-
-                            card.removeEventListener('transitionend', land);
-                            card.classList.remove('flying');
-                            card.style.transition = '';
-                            card.style.transform = '';
-                            finish();
-                        };
-
-                        // A card can inherit the DOM element of a vanished open card: when a pair
-                        // matches, the cell goes card -> null -> another card inside one digest, so
-                        // ng-if never tears it down. `show` is gone but both faces are still
-                        // rotated open and would spend the whole flight turning back — the card
-                        // flies face-up. Snapping the faces to their closed state without a
-                        // transition is the only way to land them before the flight starts.
-                        card.classList.add('instant');
-                        void card.offsetHeight;
-                        card.classList.remove('instant');
-
-                        card.classList.add('flying');
-                        card.style.transition = 'none';
-                        card.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) rotate(0deg)';
-
-                        // Reflow pins that offset as the transition's starting point. rAF is the usual
-                        // trick, but it stalls while the tab is backgrounded and the card jumps instead.
-                        void card.offsetHeight;
-
-                        card.style.transition = 'transform ' + DURATION + 'ms ease-in-out ' + (n * STAGGER) + 'ms';
-                        card.style.transform = 'translate(0, 0) rotate(' + (n % 2 ? -SPIN : SPIN) + 'deg)';
-
-                        card.addEventListener('transitionend', land);
-                        $timeout(land, DURATION + n * STAGGER + 200, false);
-                    });
-                }, 0, false);
             };
+
+            scope.$watchGroup(
+                [attrs.cardPos + '.row', attrs.cardPos + '.col', attrs.cardPos + '.spin', attrs.cardPos + '.delay'],
+                function () { apply(scope.$eval(attrs.cardPos)); }
+            );
+        }
+    };
+});
+
+memGame.directive('boardGrid', function () {
+    return {
+        link: function (scope, element, attrs) {
+            scope.$watch(attrs.boardGrid, function (grid) {
+                if (grid) element[0].style.setProperty('--grid', grid);
+            });
         }
     };
 });
@@ -192,11 +140,11 @@ memGame.factory('cardArt', function ($window) {
         if (++frames % EVERY === 0) {
             frame(t);
             angular.forEach(targets, function (target) {
-                // Skip cards that are turning or in flight. Repainting a canvas inside an element
-                // the compositor is animating forces it to re-rasterise every frame, which is what
-                // makes the flip stutter — and the drifting pattern is invisible mid-turn anyway.
+                // Skip cards that are turning or leaving. Repainting a canvas inside an element the
+                // compositor is animating forces it to re-rasterise every frame, which is what made
+                // the flip stutter — and the drifting pattern is invisible mid-turn anyway.
                 var cls = target.card && target.card.className;
-                if (cls && (cls.indexOf('show') !== -1 || cls.indexOf('flying') !== -1 || cls.indexOf('leaving') !== -1)) return;
+                if (cls && (cls.indexOf('show') !== -1 || cls.indexOf('leaving') !== -1)) return;
 
                 target.ctx.drawImage(source, 0, 0, target.canvas.width, target.canvas.height);
             });

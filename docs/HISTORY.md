@@ -328,3 +328,57 @@ Debugging note that cost real time here: a Chrome tab whose window is not focuse
 `document.hidden`, freezes rAF and throttles timers hard. Measurements taken there are
 worthless — at one point `current` was still set 2.5s after a click simply because the
 `$timeout` had not run. Verify anything time-dependent in a focused window.
+
+
+## 2026-08-24 — Cards became a flat list that owns its position
+
+The board was a matrix of cells with cards living inside them, which made a card's identity
+depend on where it sat. That is backwards: the matrix is only a screen layout, and it is
+variable. Cards are now a flat list of objects carrying `row`/`col`, rendered with
+`track by card.id` and positioned absolutely from `--row`/`--col` custom properties.
+
+Consequences, all of them simplifications:
+
+- Relocating a card is `card.row = r; card.col = c`. CSS transitions the transform; that IS
+  the flight. The `cardFlight` directive — rect measuring, FLIP, staggered inline transforms,
+  transitionend bookkeeping, landing callbacks — was deleted outright.
+- `current`/`second` hold card objects, so "open" is identity rather than a coordinate string.
+- Removing a matched pair splices two entries; no other element is touched.
+- The deferred tick added a few hours earlier is gone: nothing can reuse another card's
+  element now, because elements are keyed to cards.
+
+This retires the entire family of bugs chased through the preceding sessions (cards flying
+face-up, faces desyncing, elements inheriting state) rather than patching another instance of
+it. Roughly 100 lines of directive and all the table/cell CSS went with it.
+
+
+## 2026-08-24 — Vanishing no longer moves the card
+
+`@keyframes vanish` set `transform` outright, which dropped the positional `translate` the card
+carries — a matched card jumped to the top-left corner and shrank there.
+
+Position and disappearance now share the transform without fighting over it: `--vanish-scale`
+and `--vanish-tilt` are registered with `@property` (so they can be animated at all), the card's
+transform composes them after its translate, and the keyframes touch only those two custom
+properties plus opacity. The card shrinks where it stands.
+
+Verification note: style recalculation is frozen in a backgrounded tab — even changing `--row`
+inline left `getComputedStyle().transform` unchanged — so this was checked by reading the rule
+and the registered property values, not by measuring the animation.
+
+
+## 2026-08-24 — Every touched card moves, in sequence
+
+The reshuffle used to relocate a random handful of seen cards, bounded by how many squares
+happened to be free. Now all of them move.
+
+The crowding problem — many touched cards, few gaps — is solved by moving them one at a time:
+a card that leaves frees its own square for the next one, so the vacancy walks through the set
+and one gap suffices. The stagger is part of the mechanic, not styling; without it two cards
+would be mid-flight into the same square.
+
+`step` scales down as the mover count rises so the run stays inside 700ms — a 6x6 board with
+35 cards moving still finishes in that window rather than taking 35 x 160ms.
+
+Verified on the worst case (6x6, a single gap, everything seen): 35 of 35 cards moved, 35
+distinct squares afterwards, zero DOM elements rebuilt.

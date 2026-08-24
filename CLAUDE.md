@@ -51,39 +51,22 @@ It animates relocation with FLIP: measure each card's rect before the model chan
 
 ### Game board model
 
-`Game.createGrid(n)` builds a flat array of pairs `1..n*n/2` (each twice), shuffles it via `utils.mixRow`, then chops it into an `n × n` array-of-arrays in `$scope.array`.
+**Cards are a flat list that owns its own position.** `$scope.cards` holds `{id, v, row, col, seen, spin, delay, leaving}`; the grid is not a data structure at all, just the range `row`/`col` are allowed to take. The view is `ng-repeat ... track by card.id` over that list, so **a DOM element belongs to a card, not to a square** — moving a card is an assignment to `row`/`col`, and the element it is bound to is never rebuilt.
 
-**A cell is `null` (empty) or a card object `{v, seen, moving}`** — `v` is the face value, `seen` means the player has flipped it at least once, `moving` drives the relocation animation for one tick. State lives on the card rather than in a position-keyed set precisely because cards relocate; a `"i:j"` key would go stale the moment one moves.
+That is the whole reason the board is laid out with absolute positioning rather than a table: relocating a card is a transform change that CSS animates on its own. There is no measuring, no FLIP, and no directive coordinating flights. The earlier design bound elements to cells, which meant a matched pair's cell could be emptied and refilled inside one digest — `ng-if` then reused the vanished open card's element and the arriving card flew face-up. That entire class of bug is gone by construction.
 
-Position is still expressed as the string `"i:j"`, but only for the currently open pair:
+`createGrid(n)` deals `1..n*n/2` twice, shuffles both the values and the list of squares, and pairs them up.
 
-- `$scope.current` / `$scope.second` — keys of the first and second flipped cards.
-- `$scope.temp` — face value of the first flipped card, for the match comparison.
-- `$scope.isTimeout` — true during the 1s reveal after a mismatch; blocks further flips.
+- `current` / `second` are **card objects**, not coordinates, so `isOpen(card)` is identity — a card cannot be "open" because of where it happens to sit.
+- `rotate(card)` ignores clicks while `isTimeout` holds, on a leaving card, and on the already-open card.
+- **Match** — the pair stays face-up for `REVEAL` (700ms), then both get `leaving: true` (the `vanish` animation), then after `LEAVE` (400ms) they are spliced out of `cards` and `shuffleSeen()` fills the gaps.
+- **Mismatch** — after `PENALTY` (1s) the pair flips back and `shuffleSeen()` runs.
 
-`rotate(i, j)` ignores empty cells, ignores clicks during the timeout, and ignores a re-click on `current` (that last check stops a double-click matching a card with itself). Both outcomes are timed sequences with `isTimeout` held true throughout, so the board is inert until they finish:
+`shuffleSeen(done)` is the penalty mechanic: **every** seen, unopened card moves, one after another. They are relocated in sequence, and a card that leaves puts its own square back into the free list for whoever comes next — which is why a single gap is enough to walk the whole set along, however crowded the board is. The staggered `delay` is therefore load-bearing rather than decorative: it keeps the vacancy ahead of the card taking it. `step` shrinks as the number of movers grows so the whole run still fits inside `RUN` (700ms). `spin` accumulates a whole turn per move, so the card rotates in transit and still rests at its original angle. `done` fires once the last card has had time to land, and the board stays locked until then.
 
-- **Match** — the pair stays face-up for `REVEAL` (700ms), then both cards get `leaving: true` (the `vanish` animation), then after `LEAVE` (400ms) both cells become `null` and, **one tick later**, `shuffleSeen()` runs into the cells they just freed. That deferred tick is load-bearing: emptying and refilling a cell inside one digest means `ng-if` never sees it empty, so it reuses the vanished open card's element and the arriving card flies face-up. `LEAVE` must outlast `@leave-duration` in the Less or cards vanish mid-animation.
-- **Mismatch** — after 1s the pair flips back and `shuffleSeen()` runs.
+Win is "no cards left".
 
-Both paths hold `isTimeout` until the resulting flights land. `shuffleSeen(done)` takes a completion callback and hands it to `flyMoves`, which calls it only after **every** card has reported landed. Do not go back to unlocking on a computed duration: the deferred render and reflow aren't in that number, so the board unlocked a few tens of ms early and a click in that window flipped a still-moving card open.
-
-`shuffleSeen(done)` is the penalty mechanic: it moves a random count (1..min(#empty, #seen)) of seen, unopened cards into empty cells, so a wrong guess scrambles part of what the player had memorised. It reuses `utils.mixRow` to pick the source and target cells and is a silent no-op when the board has no holes yet or nothing has been seen. Cards are conserved — never dropped, never stacked — which is what `shuffle.test.js` pins down.
-
-**It hands the planned moves to `$scope.flyMoves` *before* mutating `$scope.array`** — that ordering is load-bearing: the `cardFlight` directive has to measure where the cards currently are while they are still drawn in their old cells. (It survives the other order only because the DOM lags the model until the next digest, which is not something to rely on.)
-
-Win is "no cards left": `$scope.left` is seeded by `createGrid` and decremented in `remove()`, and `checkWin()` is a comparison. It is bound twice in the template and so runs on every digest — do not turn it back into a grid scan.
-
-`isOpen(i, j)` only reports the currently flipped pair now; permanently-visible matched cards no longer exist.
-
-### Page backdrop
-
-`backdrop` (on the canvas in `index.html`) paints the animated page background: drifting radial colour pools with wave bands over them, on a 240×150 canvas that CSS stretches to the viewport. Two things make it work:
-
-- **`ctx.filter = 'blur(7px)'` in source pixels**, which is ~40px once stretched. Without it the wave edges survive the upscale and the whole thing looks pixelated.
-- **The colour lives on `html`, and `body` is transparent.** A background on `body` paints after negative-z-index children and hides the canvas completely.
-
-Measured at 0.07ms/frame for the full workload — there is no reason to reach for WebGL unless the look changes to a per-pixel shader gradient.
+Positions reach the DOM through `cardPos`, which writes `--row`, `--col`, `--spin` and `--delay` as custom properties; the CSS turns those into a transform. Card size and gap live only in CSS, so the JS never needs to know pixel geometry.
 
 ### Styles
 
