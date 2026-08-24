@@ -79,6 +79,10 @@ function game(): void {
   const banner = document.createElement('div');
   banner.className = 'win-banner';
 
+  // In the document before the cards are built, so each card's canvas is sized from its real
+  // on-screen box — which depends on the grid, since a big grid shrinks the cards.
+  view.replaceChildren(board_, moves);
+
   const engine = new Game(grid, { reshuffle, onChange: () => paint() });
   board = new Board(board_, engine, art);
   board_.appendChild(banner);
@@ -90,7 +94,6 @@ function game(): void {
   }
 
   paint();
-  view.replaceChildren(board_, moves);
   control.replaceChildren(button('Reset', '#/splash'));
 }
 

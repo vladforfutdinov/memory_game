@@ -53,6 +53,10 @@ Reshuffling is optional — a checkbox on the splash screen, passed as `new Game
 
 Values duplicated across the boundary are commented on both sides: `TIMING.leave` ↔ `--leave-duration`, `TIMING.move` ↔ `--move-duration`, `card-art.ts`'s `BASE` ↔ `--card-back`. Card size and gap live only in CSS — the TypeScript never deals in pixels.
 
+**Cards size themselves to the viewport.** `--card-max` (72px) is a ceiling, not a fixed size: `.board` solves for the largest card width that fits both the viewport width and its height minus `--chrome` (the room the moves line and control row need), and takes the smaller. The gap and the digit's font size are shares of the card width, so everything scales together and a 10×10 grid shrinks instead of overflowing. Nothing about this needs JavaScript, so it also survives a window resize.
+
+One ordering consequence: `main.ts` puts the board in the document *before* building the cards, because `card-art` sizes each canvas from the card's real on-screen box — which now depends on the grid.
+
 Two traps that cost real time, both recorded in `docs/HISTORY.md`:
 
 - **Never transition `all` on the card faces.** It animates `z-index` and `visibility`, which are discrete and therefore switch at the *end* of the curve.

@@ -421,3 +421,18 @@ HTML produces the production `dist/` with hashed asset names.
 
 That removed the project's only runtime dependency (`http-server`), the `src/dist` bundle
 committed into the served tree, and the "rebuild, then reload" step during development.
+
+
+## 2026-08-24 — Cards scale to the viewport
+
+72x96 is now a maximum rather than the size. `.board` derives the card width from two limits —
+the viewport width, and its height minus the space the moves line and control row occupy — and
+takes whichever is smaller, capped at `--card-max`.
+
+The algebra is in a comment beside it: board width is `card-w * (n * (1 + gap-share) - gap-share)`,
+and height the same with each card `--card-ratio` taller, so solving each for `card-w` gives the
+two limits. Gap and digit size are shares of the card width, so the whole board scales as one.
+
+Kept in CSS deliberately: no resize listener, no measuring, and it holds while a window is being
+dragged. Measured at 1471x818 — 2x2 through 6x6 stay at 72px, 8x8 drops to 57px, 10x10 to 46px;
+at 479x590 a 10x10 board sits at 30px cards with nothing scrolling.

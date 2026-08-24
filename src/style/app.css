@@ -6,11 +6,13 @@
   --flip-ease: ease-in-out;
   --leave-duration: .4s;          /* keep in step with LEAVE in app.js */
 
-  --card-w: 72px;
-  --card-h: 96px;
-  --gap: 10px;
-  --step-x: calc(var(--card-w) + var(--gap));
-  --step-y: calc(var(--card-h) + var(--gap));
+  /* Cards are 3:4 and never larger than this; a big grid shrinks them to fit. */
+  --card-max: 72px;
+  --card-ratio: 1.3333;
+  /* gap as a share of card width, so spacing shrinks with the cards */
+  --gap-share: 0.14;
+  /* room the moves line and the control row need below the board */
+  --chrome: 150px;
 
   --move-duration: .45s;          /* keep in step with MOVE in app.js */
   --move-ease: ease-in-out;
@@ -88,6 +90,21 @@ body {
 /* A card is positioned by its own --row/--col, not by a table cell, so relocating it is a
    transform change on an element that stays put in the DOM. */
 .board {
+  /* Board width  = n cards + (n-1) gaps = card-w * (n * (1 + share) - share)
+     Board height = the same with each card 4/3 taller.
+     Solving both for card-w gives the two limits below; the smallest wins, so a 10x10 grid
+     shrinks its cards instead of running off the screen. */
+  --fit-w: calc((100vw - 2rem) / (var(--grid, 4) * (1 + var(--gap-share)) - var(--gap-share)));
+  --fit-h: calc(
+    (100dvh - var(--chrome)) /
+    (var(--grid, 4) * (var(--card-ratio) + var(--gap-share)) - var(--gap-share))
+  );
+  --card-w: min(var(--card-max), var(--fit-w), var(--fit-h));
+  --card-h: calc(var(--card-w) * var(--card-ratio));
+  --gap: calc(var(--card-w) * var(--gap-share));
+  --step-x: calc(var(--card-w) + var(--gap));
+  --step-y: calc(var(--card-h) + var(--gap));
+
   position: relative;
   margin: 0 auto;
   width: calc(var(--grid, 4) * var(--step-x) - var(--gap));
@@ -158,7 +175,7 @@ body {
     place-items: center;
     color: #000;
     background: var(--card-face);
-    font-size: 3em;
+    font-size: calc(var(--card-w) * 0.55);
     z-index: 0;
     transform: rotateX(-180deg);
   }
@@ -196,7 +213,7 @@ p {
   display: grid;
   place-items: center;
   color: #f4f8fc;
-  font-size: 1.6rem;
+  font-size: clamp(1.1rem, 4vw, 1.6rem);
   font-weight: 600;
   letter-spacing: .02em;
   text-shadow: 0 1px 2px rgb(6 14 26 / .9), 0 4px 18px rgb(6 14 26 / .7);
