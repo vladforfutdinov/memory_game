@@ -1,3 +1,5 @@
+import { drawStroke, pickStrokes, strokeColours, type Stroke, type StrokeColours } from './strokes';
+
 /**
  * One animated source canvas, blitted into every card back, so all backs show the identical
  * frame. Drawing per card instead would drift them out of step and cost 100x the geometry.
@@ -9,15 +11,14 @@ const HEIGHT = 192;
 const SS = 2;
 /** redraw every 2nd frame — a time threshold beats against the refresh rate */
 const EVERY = 2;
-const SPEED = 0.0004;
 const ZOOM = 1.5;
-/** extra scale for the centre medallion only, lattice unaffected */
-const MEDAL = 1.5;
 
 /** keep in step with --card-back in app.css */
 const BASE = '#414f60';
 const INK = ['rgba(158, 200, 172, .55)', 'rgba(220, 176, 138, .48)'] as const;
-const MEDALLION = 'rgba(236, 206, 158, .8)';
+/** Card backs draw the same brush strokes as the backdrop, only smaller and fewer. */
+const WAVE_COUNT = 3;
+const WAVE_PALETTE = ['158, 200, 172', '236, 206, 158', '120, 158, 190'] as const;
 
 interface Target {
   canvas: HTMLCanvasElement;
@@ -29,9 +30,20 @@ interface Target {
 export class CardArt {
   private readonly source = document.createElement('canvas');
   private readonly ctx: CanvasRenderingContext2D;
+  /** this session's cast, drawn from the shared pool */
+  private readonly waves: Stroke[] = pickStrokes({
+    count: WAVE_COUNT,
+    palette: WAVE_PALETTE,
+    alpha: [0.26, 0.36],
+    weight: 2,          // a card is small, so a stroke needs proportionally more body
+    speed: 8,          // livelier than the backdrop: less area, so motion reads less
+    spread: [0.2, 0.8],   // one band each, so three strokes cover the back instead of bunching
+  });
+  private readonly waveColours: StrokeColours[] = this.waves.map(strokeColours);
   private targets: Target[] = [];
   private frames = 0;
   private running = false;
+  private readonly latticeOffset = Math.random() * 1000;
 
   constructor() {
     this.source.width = WIDTH * SS;
@@ -97,47 +109,16 @@ export class CardArt {
 
   private frame(t: number): void {
     const ctx = this.ctx;
-    const cx = WIDTH / 2;
-    const cy = HEIGHT / 2;
-    const turn = t * SPEED;
-    const pulse = (Math.sin(t * SPEED * 2) + 1) / 2;
 
     ctx.fillStyle = BASE;
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-    // Medallion first, lattice over it, so the net runs across the disc.
-    const disc = 21 * ZOOM * MEDAL;
+    this.waves.forEach((wave, i) => drawStroke(this.ctx, wave, this.waveColours[i]!, WIDTH, HEIGHT, t));
 
-    ctx.fillStyle = BASE;
-    ctx.beginPath();
-    ctx.arc(cx, cy, disc, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.lineWidth = 1.5 * MEDAL;
-    for (let ring = 0; ring < 3; ring++) {
-      ctx.strokeStyle = ring % 2 ? MEDALLION : INK[0];
-      this.polygon(cx, cy, (16 - ring * 4 + pulse * 3) * ZOOM * MEDAL, 6, ring % 2 ? -turn : turn);
-    }
-
-    ctx.strokeStyle = MEDALLION;
-    ctx.beginPath();
-    ctx.arc(cx, cy, disc, 0, Math.PI * 2);
-    ctx.stroke();
-
-    this.lattice(11 * ZOOM, t * SPEED * 26);
-  }
-
-  private polygon(cx: number, cy: number, radius: number, sides: number, turn: number): void {
-    const ctx = this.ctx;
-    ctx.beginPath();
-    for (let i = 0; i < sides; i++) {
-      const a = turn + (i * 2 * Math.PI) / sides;
-      const x = cx + radius * Math.cos(a);
-      const y = cy + radius * Math.sin(a);
-      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-    }
-    ctx.closePath();
-    ctx.stroke();
+    // Lattice last, so the net reads across the waves rather than being covered by them. It is
+    // static: only the waves move under it, which reads as depth rather than as two things
+    // sliding past each other. The offset is randomised per session, not animated.
+    this.lattice(11 * ZOOM, this.latticeOffset);
   }
 
   /** Diagonal lattice in both directions, drifting by `shift`, clipped to the card. */

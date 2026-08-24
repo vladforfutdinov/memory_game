@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
 import { Game, TIMING, type Card } from './src/ts/game';
+import { pickStrokes } from './src/ts/strokes';
 
 /** Collects timer callbacks so a test can advance the sequence by hand. */
 function manual() {
@@ -185,6 +186,16 @@ test('with reshuffle off, a turn still resolves and unlocks', () => {
   clock.run();                                               // penalty elapses; nothing moves
   expect(game.locked).toBe(false);
   expect(clock.pending.length).toBe(0);                      // no flight timer was scheduled
+});
+
+test('a spread cast never bunches up', () => {
+  for (let run = 0; run < 200; run++) {
+    const cast = pickStrokes({ count: 3, palette: ['1,2,3'], alpha: [0.3, 0.3], spread: [0.2, 0.8] });
+    const ys = cast.map((s) => s.oy).sort((a, b) => a - b);
+    expect(Math.min(ys[1]! - ys[0]!, ys[2]! - ys[1]!)).toBeGreaterThan(0.09);
+    expect(ys[0]!).toBeGreaterThan(0.15);
+    expect(ys[2]!).toBeLessThan(0.85);
+  }
 });
 
 test('clearing the board is a win', () => {
